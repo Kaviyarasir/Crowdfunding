@@ -1,0 +1,212 @@
+
+select count(*) from projects;
+alter table projects
+add column created_on date;
+
+alter table projects
+add column successful_on date;
+
+/*****epochetime to created_on ********/
+UPDATE projects
+SET created_on = CONVERT_TZ(FROM_UNIXTIME(created_at), '+00:00', '+05:30');
+
+UPDATE projects
+SET successful_on = CONVERT_TZ(FROM_UNIXTIME(successful_at), '+00:00', '+05:30');
+set sql_safe_updates=0;
+
+select created_on from projects;
+
+/**************calender Table ************/
+
+CREATE TABLE IF NOT EXISTS calender (
+    Date DATE NOT NULL,
+    Year INT NOT NULL,
+    Month_number INT NOT NULL,
+    Month_fullname VARCHAR(20) NOT NULL,
+    Quarter INT NOT NULL,
+    YearMonth VARCHAR(7) NOT NULL,
+    Weekday_No INT NOT NULL,
+    Weekday_Name VARCHAR(10) NOT NULL,
+    Financial_Month VARCHAR(20) NOT NULL,
+    Financial_Quarter VARCHAR(10) NOT NULL
+);
+
+ /*primary key to calender*/
+
+ALTER TABLE calender
+ADD PRIMARY KEY (Date);
+select *from calender;
+
+Alter table projects
+add constraint fk_1 foreign key(created_on) references calender(date);
+SELECT created_on 
+FROM projects
+WHERE created_on NOT IN (SELECT date FROM calender);
+
+ALTER TABLE projects
+ADD CONSTRAINT fk_1
+FOREIGN KEY (created_on) REFERENCES calender(date);
+
+/************creator table**********/
+create table creator(
+	id int primary key,
+    name varchar(100));
+    
+alter table projects
+add constraint fk_creator foreign key(creator_id) references creator(id);
+
+
+/***********category************/
+create table category(
+	id	int primary key,
+    name varchar(100),
+	parent_id int
+);
+
+
+alter table projects
+add constraint fk_category foreign key(category_id) references category(id);
+
+
+/**************************location**************/
+create table location(
+	id int primary key,
+	displayable_name varchar(100),
+	type varchar(50),
+	name varchar(100),
+    state	varchar(100),
+    short_name	varchar(100),
+    country varchar(20)
+);
+
+alter table projects
+add constraint fk_location foreign key(location_id) references location(id);
+
+
+select count(*) from location;
+desc projects;
+
+
+
+
+
+
+/***********5th one **********/
+
+/********total no.of projects by outcome*****************/
+select state,count(*) from projects
+group by state;
+
+
+/********Total Number of Projects based on Locations**********************/
+select country,Count(*) as count_location from projects
+group by country;
+
+
+/*****************Total Number of Projects based on  Category************/
+select   category_id, c.name, count(*) as count_category from projects as p
+join category as c
+on c.id=p.category_id
+group by category_id;
+
+
+/************Total Number of Projects created by Year , Quarter , Month************/
+
+select year(created_on) as Year, count(*) as count_year from projects
+group by year(created_on);
+
+select month(created_on) as month, count(*) as count_year from projects
+group by month(created_on);
+
+SELECT 
+  CASE 
+    WHEN quarter(created_on) = 1 THEN 'Q1 - Jan-Mar'
+    WHEN quarter(created_on) = 2 THEN 'Q2 - Apr-Jun'
+    WHEN quarter(created_on) = 3 THEN 'Q3 - Jul-Sep'
+    ELSE 'Q4 - Oct-Dec' 
+  END AS Quarter,
+  COUNT(*) AS count_year 
+FROM projects 
+GROUP BY created_on, quarter(created_on);
+
+
+
+
+
+/*********6th one**********/
+
+/*********Amount raised**********/
+
+select sum(pledged) as Amount from projects
+where state="successful";
+
+/*******count of backers**********/
+select Count(backers_count) as Backers from projects
+where state="Successful";
+
+/*********Avg no.of days for successful projects**********/
+
+select name, avg(DATEDIFF(successful_on,created_on)) as AverageDaysToSuccess from  projects 
+where state = 'successful'
+group by name;
+
+
+/*********7th one *********/
+
+/*******top projects by count of backers**********/
+select name, Count(backers_count) as Backers from projects
+where state="Successful"
+group by name
+order by count(backers_count) desc
+limit 5;
+
+/*******top projects by Amount**********/
+select name, concat(format(sum(pledged)/1000,0),"k") as Amount from projects
+where state="Successful"
+group by name
+order by sum(pledged) desc
+limit 5;
+
+
+/*********8th one **********/
+/***********Percentage of Successful projects**********/
+
+select concat(round((count(case when state = 'successful' then 1 end) / count(*)) * 100, 0), '%') as successrate
+from projects;
+
+
+
+/********** Percentage of Successful Projects  by Category**************/
+
+select c.name, concat(round((count(case when state = 'successful' then 1 end) / count(*)) * 100, 0), '%') as successrate 
+from projects
+join category as c
+on c.id=projects.category_id
+where projects.state="successful"
+group by c.name;
+
+
+/**********Percentage of projects by year********/
+
+select year(created_on) as year, concat(round((count(case when state = 'successful' then 1 end) / count(*)) * 100, 0), '%') as success_rate
+from projects
+group by year(created_on);
+
+
+/********Percentage of successful projects by Goal-Range********/
+
+select 
+  case 
+    when goal >= 1 and goal <= 1000 then '1-1000'
+    when goal >= 1001 and goal <= 2000 then '1001-2000'
+    when goal >= 2001 and goal <= 3000 then '2001-3000'
+    when goal >= 3001 and goal <= 4000 then '3001-4000'
+    when goal >= 4001 and goal <= 5000 then '4001-5000'
+    else '5001+'
+  end as goal_range,
+  concat(round(count(case when state = 'successful' then 1 end) / count(*) * 100, 0), '%') as success_rate
+from projects
+group by goal_range
+order by goal_range;
+
+
